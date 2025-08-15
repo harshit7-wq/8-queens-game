@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>N-Queens Solver (JS)</title>
+<style>
+  :root{
+    --bg:#0f1226; --panel:#161a36; --panel2:#1e2349;
+    --accent:#7aa7ff; --text:#e9ecff; --muted:#b9c3ff;
+    --good:#38d39f;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:Inter,system-ui,Segoe UI,Roboto,Arial;
+    background: radial-gradient(1000px 600px at 20% 5%, #171a36, #0b0e22) fixed, var(--bg);
+    color:var(--text); min-height:100vh; display:flex; align-items:center; justify-content:center;
+  }
+  .wrap{
+    width:min(1100px,95vw); padding:16px;
+  }
+  header{
+    background: linear-gradient(180deg, var(--panel), var(--panel2));
+    border:1px solid #2b3370; border-radius:16px; padding:14px 16px; margin-bottom:14px;
+    display:flex; flex-wrap:wrap; align-items:center; gap:12px; justify-content:space-between;
+    box-shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  h1{font-size:clamp(1.1rem,3vw,1.6rem); margin:0}
+  .controls{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+  label{font-weight:600; color:var(--muted)}
+  select, input[type="number"]{
+    background:#121531; color:var(--text); border:1px solid #2b3370; border-radius:10px; padding:.45rem .6rem;
+  }
+  button{
+    background:linear-gradient(180deg,#232958,#171c3e);
+    border:1px solid #2b3370; color:var(--text); border-radius:10px; padding:.5rem .85rem; font-weight:700; cursor:pointer;
+    box-shadow:0 6px 16px rgba(0,0,0,.25);
+    transition:transform .05s ease, box-shadow .2s ease, border-color .2s;
+  }
+  button:hover{ border-color:var(--accent) }
+  button:active{ transform:translateY(1px) }
+
+  .stats{
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center; font-weight:600;
+  }
+  .pill{
+    background:#121531; border:1px solid #2b3370; padding:.4rem .6rem; border-radius:999px;
+  }
+
+  .panel{
+    background:linear-gradient(180deg,#151940,#121531);
+    border:1px solid #2b3370; border-radius:16px; padding:14px; box-shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+
+  /* Board */
+  .board{
+    --n:8;
+    display:grid; grid-template-columns:repeat(var(--n), 1fr);
+    aspect-ratio:1/1; gap:2px; border-radius:12px; overflow:hidden; user-select:none;
+    border:1px solid #2b3370;
+  }
+  .sq{
+    display:grid; place-items:center; font-size:clamp(14px, 5vw, 28px);
+    background:#0e1130;
+  }
+  .sq.dark{ background:#182058 }
+  .sq .q{ filter: drop-shadow(0 3px 6px rgba(0,0,0,.35)); }
+  .legend{opacity:.8; font-size:.92rem; margin-top:8px}
+
+  /* Pager + gallery */
+  .viewer{
+    display:grid; grid-template-columns: 1fr; gap:14px;
+  }
+  .pager{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:space-between;
+  }
+  .pager .left, .pager .right{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
+  .gallery{
+    display:grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr));
+    gap:10px;
+  }
+  .mini{
+    --n:8;
+    display:grid; grid-template-columns:repeat(var(--n), 1fr);
+    aspect-ratio:1/1; gap:1px; border-radius:10px; overflow:hidden; border:1px solid #2b3370;
+  }
+  .mini .sq{ font-size: clamp(8px, 2.5vw, 16px) }
+
+  @media (min-width:860px){
+    .viewer{ grid-template-columns: 1fr 1fr }
+  }
+  .ok{ color:var(--good); font-weight:800 }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>♛ N-Queens Solver</h1>
+      <div class="controls">
+        <label for="n">N:</label>
+        <input id="n" type="number" min="4" max="14" value="8" />
+        <button id="solve">Solve</button>
+        <button id="random">Random Solution</button>
+      </div>
+      <div class="stats">
+        <div class="pill">Total: <span id="total">—</span></div>
+        <div class="pill">Current: <span id="current">—</span></div>
+        <div class="pill">Time: <span id="time">—</span> ms</div>
+      </div>
+    </header>
+
+    <div class="panel viewer">
+      <div>
+        <div id="board" class="board" aria-label="N-Queens board"></div>
+        <div class="legend">Showing solution <span id="idx">—</span> of <span id="count">—</span>.</div>
+      </div>
+      <div>
+        <div class="pager">
+          <div class="left">
+            <button id="prev">⟵ Prev</button>
+            <button id="next">Next ⟶</button>
+          </div>
+          <div class="right">
+            <label for="jump">Go to #</label>
+            <input id="jump" type="number" min="1" value="1" style="width:80px" />
+            <button id="go">Go</button>
+          </div>
+        </div>
+        <div style="height:10px"></div>
+        <div class="gallery" id="gallery"></div>
+      </div>
+    </div>
+    <div style="opacity:.85; margin-top:10px">
+      Tip: Larger N can be slow. Try 8–12. The algorithm is classic backtracking (same as your Python).
+    </div>
+  </div>
+
+<script>
+(() => {
+  // -------- Backtracking solver (JS translation) ----------
+  // Represent a solution as an array 'pos' where pos[row] = col of the queen in that row.
+  function solveNQueens(n, limit = Infinity) {
+    const solutions = [];
+    const cols = new Array(n).fill(false);
+    const diag1 = new Array(2*n-1).fill(false); // r - c + (n-1)
+    const diag2 = new Array(2*n-1).fill(false); // r + c
+    const pos = new Array(n).fill(-1);
+
+    function place(row){
+      if (solutions.length >= limit) return;
+      if (row === n) {
+        solutions.push(pos.slice());
+        return;
+      }
+      for (let col = 0; col < n; col++) {
+        const d1 = row - col + (n - 1);
+        const d2 = row + col;
+        if (!cols[col] && !diag1[d1] && !diag2[d2]) {
+          pos[row] = col;
+          cols[col] = diag1[d1] = diag2[d2] = true;
+          place(row + 1);
+          cols[col] = diag1[d1] = diag2[d2] = false;
+        }
+      }
+    }
+    place(0);
+    return solutions;
+  }
+
+  // -------- Rendering ----------
+  const boardEl = document.getElementById('board');
+  const galleryEl = document.getElementById('gallery');
+  const nInput = document.getElementById('n');
+  const totalEl = document.getElementById('total');
+  const currentEl = document.getElementById('current');
+  const timeEl = document.getElementById('time');
+  const idxEl = document.getElementById('idx');
+  const countEl = document.getElementById('count');
+  const btnSolve = document.getElementById('solve');
+  const btnPrev = document.getElementById('prev');
+  const btnNext = document.getElementById('next');
+  const btnRandom = document.getElementById('random');
+  const jumpInput = document.getElementById('jump');
+  const btnGo = document.getElementById('go');
+
+  let sols = [];
+  let cur = 0;
+  let N = 8;
+
+  function renderBoard(container, n, solution){
+    container.style.setProperty('--n', n);
+    container.innerHTML = '';
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'sq' + ((r + c) % 2 ? ' dark':'');
+        if (solution && solution[r] === c) {
+          const q = document.createElement('div');
+          q.className = 'q';
+          q.textContent = '♛';
+          cell.appendChild(q);
+        }
+        container.appendChild(cell);
+      }
+    }
+  }
+
+  function renderCurrent(){
+    if (!sols.length) {
+      boardEl.innerHTML = '';
+      galleryEl.innerHTML = '';
+      totalEl.textContent = '0';
+      currentEl.textContent = '—';
+      idxEl.textContent = '—';
+      countEl.textContent = '0';
+      return;
+    }
+    renderBoard(boardEl, N, sols[cur]);
+    currentEl.textContent = (cur+1);
+    idxEl.textContent = (cur+1);
+    countEl.textContent = sols.length;
+    totalEl.textContent = sols.length;
+  }
+
+  function renderGallery(maxThumbs = 20){
+    galleryEl.innerHTML = '';
+    const k = Math.min(maxThumbs, sols.length);
+    for (let i = 0; i < k; i++){
+      const mini = document.createElement('div');
+      mini.className = 'mini';
+      mini.style.setProperty('--n', N);
+      renderBoard(mini, N, sols[i]);
+      mini.title = `Solution #${i+1}`;
+      mini.style.cursor = 'pointer';
+      mini.addEventListener('click', () => {
+        cur = i; renderCurrent();
+        window.scrollTo({top:0, behavior:'smooth'});
+      });
+      galleryEl.appendChild(mini);
+    }
+  }
+
+  function solveAndRender(){
+    N = Math.max(4, Math.min(14, parseInt(nInput.value||8,10)));
+    nInput.value = N;
+
+    const t0 = performance.now();
+    sols = solveNQueens(N); // all solutions for N (8 -> 92)
+    const t1 = performance.now();
+
+    cur = 0;
+    timeEl.textContent = (t1 - t0).toFixed(1);
+    renderCurrent();
+    renderGallery(24);
+    jumpInput.max = sols.length || 1;
+    jumpInput.value = 1;
+  }
+
+  // Controls
+  btnSolve.addEventListener('click', solveAndRender);
+  btnPrev.addEventListener('click', () => { if (sols.length){ cur = (cur-1+sols.length)%sols.length; renderCurrent(); }});
+  btnNext.addEventListener('click', () => { if (sols.length){ cur = (cur+1)%sols.length; renderCurrent(); }});
+  btnRandom.addEventListener('click', () => {
+    if (!sols.length) return;
+    cur = Math.floor(Math.random()*sols.length);
+    renderCurrent();
+  });
+  btnGo.addEventListener('click', () => {
+    if (!sols.length) return;
+    const v = Math.max(1, Math.min(sols.length, parseInt(jumpInput.value||1,10)));
+    cur = v-1; renderCurrent();
+  });
+
+  // Initial run for N=8
+  solveAndRender();
+})();
+</script>
+</body>
+</html>
